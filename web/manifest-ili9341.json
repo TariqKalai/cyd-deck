@@ -1,0 +1,11 @@
+{
+  "name": "CYD Deck (ILI9341, 1 port USB)",
+  "version": "1.0.0",
+  "new_install_prompt_erase": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [{ "path": "firmware/cyd_ili9341.bin", "offset": 0 }]
+    }
+  ]
+}

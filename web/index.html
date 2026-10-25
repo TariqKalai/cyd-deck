@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CYD Deck - Flasheur</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#2a2f3a;--fg:#e8eaf0;--mut:#8a93a6;--acc:#4f8cff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px;display:grid;gap:16px}
+h1{margin:0;font-size:22px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+h2{margin:0 0 10px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+button,input,select{font:inherit;color:var(--fg);background:#232833;border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+button{cursor:pointer}button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}
+input{flex:1;min-width:150px}
+pre{background:#0a0c10;border:1px solid var(--line);border-radius:8px;padding:10px;height:260px;overflow:auto;margin:10px 0;font-size:13px;white-space:pre-wrap}
+.m{color:var(--mut);font-size:13px}code{background:#232833;padding:1px 6px;border-radius:5px}
+.warn{color:#f5b041}
+</style></head><body><main>
+<h1>CYD Deck</h1>
+<p class="m">Flashe ton CYD depuis le navigateur (Chrome ou Edge, port USB branché sur <b>cet</b> ordinateur), puis configure-le avec la console.</p>
+
+<section><h2>1. Installer le firmware (USB)</h2>
+ <div class="row">
+  <label>Écran :</label>
+  <select id="model" onchange="setModel()">
+   <option value="manifest-ili9341.json">CYD 1 port USB (ILI9341)</option>
+   <option value="manifest-st7789.json">CYD 2 ports USB (ST7789)</option>
+  </select>
+ </div>
+ <esp-web-install-button id="inst" manifest="manifest-ili9341.json">
+  <button slot="activate" class="p">Installer / mettre à jour</button>
+  <span slot="unsupported" class="warn">Web Serial non supporté : utilise Chrome ou Edge sur ordinateur.</span>
+  <span slot="not-allowed" class="warn">Web Serial demande https:// ou http://localhost.</span>
+ </esp-web-install-button>
+ <p class="m">Cocher « effacer » remet tout à zéro (Wi-Fi et boutons compris). Sous Linux : ton utilisateur doit être dans le groupe <code>dialout</code> (ou <code>uucp</code>).</p>
+</section>
+
+<section><h2>2. Console série et configuration Wi-Fi</h2>
+ <div class="row"><button class="p" id="bc" onclick="connect()">Connecter</button><button onclick="disconnect()">Déconnecter</button><span class="m" id="st">non connecté</span></div>
+ <pre id="log"></pre>
+ <div class="row"><input id="cmd" placeholder="Commande (help, status, reboot…)" onkeydown="if(event.key==='Enter')sendCmd()"><button onclick="sendCmd()">Envoyer</button></div>
+ <div class="row"><input id="ssid" placeholder="Nom du Wi-Fi"><input id="wpass" type="password" placeholder="Mot de passe Wi-Fi"><button onclick="setWifi()">Enregistrer le Wi-Fi</button></div>
+ <p class="m">Après le Wi-Fi, ouvre <code>http://cyd-deck.local</code> (ou l'IP affichée via la roue crantée du CYD). Identifiant <code>admin</code>, mot de passe par défaut <code>cyd1234</code>.</p>
+</section>
+</main>
+<script>
+let port=null,reader=null,writer=null,keepReading=false;
+const $=s=>document.querySelector(s);
+function setModel(){$('#inst').setAttribute('manifest',$('#model').value)}
+function log(t){const l=$('#log');l.textContent+=t;l.scrollTop=l.scrollHeight}
+async function connect(){
+  if(!('serial' in navigator)){log('Web Serial non supporté (Chrome/Edge requis)\n');return}
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    $('#st').textContent='connecté';
+    writer=port.writable.getWriter();
+    keepReading=true;readLoop();
+    await sendLine('status');
+  }catch(e){log('Erreur : '+e.message+'\n')}
+}
+async function readLoop(){
+  const dec=new TextDecoder();
+  while(port&&port.readable&&keepReading){
+    reader=port.readable.getReader();
+    try{for(;;){const {value,done}=await reader.read();if(done)break;if(value)log(dec.decode(value))}}
+    catch(e){log('\n[lecture interrompue] '+e.message+'\n')}
+    finally{reader.releaseLock()}
+  }
+}
+async function disconnect(){
+  keepReading=false;
+  try{if(reader)await reader.cancel()}catch(e){}
+  try{if(writer){writer.releaseLock();writer=null}}catch(e){}
+  try{if(port)await port.close()}catch(e){}
+  port=null;$('#st').textContent='non connecté'
+}
+async function sendLine(s){if(!writer){log('Pas connecté\n');return}await writer.write(new TextEncoder().encode(s+'\n'))}
+function sendCmd(){const v=$('#cmd').value.trim();if(v){sendLine(v);$('#cmd').value=''}}
+function setWifi(){
+  const s=$('#ssid').value.trim();if(!s)return;
+  if(s.includes('|')||$('#wpass').value.includes('\n')){log('Le caractère | est réservé à la commande\n');return}
+  sendLine('wifi '+s+'|'+$('#wpass').value)}
+</script></body></html>

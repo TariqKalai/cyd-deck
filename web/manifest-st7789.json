@@ -1,0 +1,11 @@
+{
+  "name": "CYD Deck (ST7789, 2 ports USB)",
+  "version": "1.0.0",
+  "new_install_prompt_erase": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [{ "path": "firmware/cyd_st7789.bin", "offset": 0 }]
+    }
+  ]
+}
